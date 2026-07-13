@@ -1,0 +1,38 @@
+# Build outputs
+Build/
+/build/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.sln.user
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.ninja
+.ninja_deps
+.ninja_log
+
+# VST3 binaries (built from source)
+*.vst3/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Binary data generated
+**/JuceLibraryCode/BinaryData*
+
+# Release zips (keep folder, ignore zips)
+release/*/*.zip
