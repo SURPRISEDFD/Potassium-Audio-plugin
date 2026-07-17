@@ -279,8 +279,12 @@ public:
     float getInputSlowPeak() const noexcept { return inputGain.getSlowPeak(); }  // top number
     float getInputFastPeak() const noexcept { return inputGain.getFastPeak(); }  // bottom number
     float getOutputRMS()    const noexcept { return outputPeakDB; }
-    float getLimiterGR() const noexcept { return limiter.getGainReductionDB(); }
+    float getLimiterGR() const noexcept {
+        float gr = limiter.getGainReductionDB();
+        return (gr < -0.05f) ? (gr - 1.0f) : 0.0f;
+    }
     float getCompressorGR() const noexcept { return compressor.getGR(); }
+    float getPhaseCorrelation() const noexcept { return phaseCorrelation; }
 
     const juce::String getName() const override { return "Potassium"; }
     bool acceptsMidi() const override    { return false; }
@@ -466,6 +470,7 @@ private:
     float lastOutputGain = 0.0f;
     float lastPush = 100.0f;
     mutable float outputPeakDB = -60.0f;
+    mutable float phaseCorrelation = 0.0f;
 
     juce::StringArray programNames;
     juce::StringArray programStates;

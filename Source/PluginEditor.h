@@ -201,6 +201,7 @@ public:
            << "S.sweet="  << (pv(ParamIDs::sweetSpot)>0.5f?"true":"false") << ";"
            << "S.compGR=" << juce::String(compGR,1) << ";"
            << "S.limGR="  << juce::String(limGR,1) << ";"
+           << "S.phase="  << juce::String(proc.getPhaseCorrelation(),3) << ";"
            << "window._render()";
         wv->evaluateJavascript(js);
     }

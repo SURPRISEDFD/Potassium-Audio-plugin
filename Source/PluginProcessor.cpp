@@ -48,5 +48,18 @@ void PotassiumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     }
     outputPeakDB = 20.0f * std::log10(outPeak + 1e-20f);
 
+    // Phase correlation for particle display
+    if (buffer.getNumChannels() >= 2) {
+        double midSum = 0.0, sideSum = 0.0;
+        for (int s = 0; s < buffer.getNumSamples(); ++s) {
+            float mid  = buffer.getSample(0, s) + buffer.getSample(1, s);
+            float side = buffer.getSample(0, s) - buffer.getSample(1, s);
+            midSum  += (double)mid * mid;
+            sideSum += (double)side * side;
+        }
+        float corr = (float)((midSum - sideSum) / (midSum + sideSum + 1e-10));
+        phaseCorrelation += 0.15f * (corr - phaseCorrelation); // smooth
+    }
+
     updateMeters(inputGain.getSweetSpotMeter(), limiter.getGainReductionDB(), inputGain.getRMSdB());
 }
