@@ -2,147 +2,136 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <cmath>
 
-/**
- * Input gain stage with high precision gain staging + sweet spot detection.
- *
- * Inspired by AirWindows PurestGain (extended-precision multiply, smooth gain chasing).
- *
- * Sweet spot:
- *   - Solo kick sweet spot : -12 dB
- *   - Full mix sweet spot   :  -6 to -5 dB
- *   The stage reports a normalised "sweet spot meter" value and illuminates
- *   when the RMS level falls inside the target window.
- */
 class InputGainStage
 {
 public:
     InputGainStage() = default;
 
-    void prepare (double sampleRate, int blockSize)
+    void prepare(double sampleRate, int samplesPerBlock)
     {
         fs = sampleRate;
+        double Tb = (double)samplesPerBlock / fs;
+
+        // Short-term RMS: 50ms window — reads close to peak but still averaged
+        stRMSCoeff = 1.0 - std::exp(-Tb / 0.050);
+
+        // Bar + sweet-spot: 30ms smoothing on short-term RMS
+        meterSmoothCoeff = 1.0 - std::exp(-Tb / 0.030);
+
+        // Slow display (top): asymmetric on short-term RMS — fast attack, slow release
+        slowAttackCoeff  = 1.0 - std::exp(-Tb / 0.200);   // 200ms rise
+        slowReleaseCoeff = 1.0 - std::exp(-Tb / 1.000);   // 1.0s fall
+
+        // Fast peak hold (bottom): 40 dB/s after 150ms hold
+        fastDecayPS = std::exp(-2.302585 / (0.5 * fs));
+
         gainChase = 1.0f;
-        rmsAccum = 0.0f;
-        rmsCount = 0;
-        currentRMSdB = -90.0f;
-        peakdB = -90.0f;
-        smoothedMeter = -90.0f;
-        meterSmoothCoeff = std::exp (-1.0f / (0.010f * (float) fs)); // 10 ms
+        fastPeakHold = 0.0f;
+        fastHoldTimer = 0;
+        stRMS = 0.0f;
+        stRMSdB = slowDisplaydB = currentRMSdB = smoothedMeter = -60.0f;
+        slowInit = true;
     }
 
-    void reset()
-    {
+    void reset() {
         gainChase = 1.0f;
-        rmsAccum = 0.0f;
-        rmsCount = 0;
-        currentRMSdB = -90.0f;
-        peakdB = -90.0f;
-        smoothedMeter = -90.0f;
+        fastPeakHold = 0.0f;
+        fastHoldTimer = 0;
+        stRMS = 0.0f;
+        stRMSdB = slowDisplaydB = currentRMSdB = smoothedMeter = -60.0f;
+        slowInit = true;
     }
 
-    /** @param gainDB  input gain in dB, typically -12 .. +12 */
-    void setGainDB (float gainDB)
-    {
-        targetGainLin = std::pow (10.0f, gainDB / 20.0f);
+    void setGainDB(float gainDB) {
+        targetGainLin = std::pow(10.0f, gainDB / 20.0f);
     }
 
-    // ── Meter queries (call after process()) ────────────────────────────────
+    // ── Meter getters ──────────────────────────────────────────────────────
+    float getRMSdB()    const noexcept { return currentRMSdB; }                       // bar + sweet-spot
+    float getSlowPeak() const noexcept { return slowDisplaydB; }                       // top — slow smoothing of short-term RMS
+    float getFastPeak() const noexcept { return 20.0f * std::log10(fastPeakHold + 1e-20f); } // bottom — peak + 150ms hold
+    float getPeakdB()   const noexcept { return getFastPeak(); }
 
-    /** Current RMS level in dBFS (block-based). */
-    float getRMSdB() const noexcept { return currentRMSdB; }
-
-    /** Current peak level in dBFS (block-based). */
-    float getPeakdB() const noexcept { return peakdB; }
-
-    /**
-     * Sweet spot indicator: 0.0 = too quiet, 1.0 = in sweet spot, 2.0 = too hot.
-     * Sweet spot window: -12 dB (solo kick) to -5 dB (full mix).
-     */
-    float getSweetSpotMeter() const noexcept
-    {
-        // Returns 0..2 where 1 is the sweet spot centre (-8.5 dB)
-        // Soft window from -14 to -3 dB
-        constexpr float centreDB    = -8.5f;  // midpoint of -12 .. -5
-        constexpr float widthDB     = 5.5f;   // half-width
-        constexpr float softnessInv = 2.0f;   // soft knee
-
+    float getSweetSpotMeter() const noexcept {
+        constexpr float centreDB = -10.5f, widthDB = 5.5f;
         auto dev = (smoothedMeter - centreDB) / widthDB;
-        // 0 at centre, 1 at edge, >1 outside
-        auto normalised = std::abs (dev);
-        if (normalised < 0.5f) return 1.0f;                               // centre zone
-        if (normalised < 1.5f) return 1.0f - (normalised - 0.5f) * 0.5f; // taper
+        auto norm = std::abs(dev);
+        if (norm < 0.5f) return 1.0f;
+        if (norm < 1.5f) return 1.0f - (norm - 0.5f) * 0.5f;
         return 0.0f;
     }
 
-    /** Returns the detected input level as a 0..1 value for the DAW meter. */
-    float getMeterValue01() const noexcept
+    void process(juce::dsp::AudioBlock<float>& block)
     {
-        return juce::jlimit (0.0f, 1.0f, (smoothedMeter + 30.0f) / 40.0f);
-    }
+        auto nc = block.getNumChannels();
+        auto ns = block.getNumSamples();
 
-    // ── Process ─────────────────────────────────────────────────────────────
-    void process (juce::dsp::AudioBlock<float>& block)
-    {
-        auto numChannels = block.getNumChannels();
-        auto numSamples  = block.getNumSamples();
+        float blockRmsSum = 0.0f;
+        int   count       = 0;
 
-        // Gain chasing (smooth parameter changes – zipper noise suppression)
-        float chaseSpeed = 0.0005f;
-        for (int s = 0; s < (int) numSamples; ++s)
+        for (int s = 0; s < (int)ns; ++s)
         {
-            // Smooth gain
-            gainChase += chaseSpeed * (targetGainLin - gainChase);
-            // Prevent denormal
-            if (std::abs (gainChase - targetGainLin) < 0.00001f)
+            gainChase += 0.0005f * (targetGainLin - gainChase);
+            if (std::abs(gainChase - targetGainLin) < 0.00001f)
                 gainChase = targetGainLin;
 
-            float peak = 0.0f;
-            for (size_t c = 0; c < numChannels; ++c)
-            {
-                auto* ch = block.getChannelPointer (c);
+            float mx = 0.0f;
+            for (size_t c = 0; c < nc; ++c) {
+                float* ch = block.getChannelPointer(c);
                 ch[s] *= gainChase;
-                auto absVal = std::abs (ch[s]);
-                if (absVal > peak) peak = absVal;
+                float a = std::abs(ch[s]);
+                if (a > mx) mx = a;
+                blockRmsSum += a * a;
+                ++count;
             }
 
-            // Meter accumulation
-            rmsAccum += peak * peak;
-            ++rmsCount;
-
-            if (peak > peakHold) peakHold = peak;
-            peakHold *= 0.9999f; // slow decay
-            if (peakHold < 1e-10f) peakHold = 1e-10f;
+            // ── Fast peak hold: instant attack, 150ms hold ──────────────
+            if (mx > fastPeakHold) {
+                fastPeakHold  = mx;
+                fastHoldTimer = (int)(fs * 0.15);
+            }
         }
 
-        // Block-level metering
-        if (rmsCount > 0)
-        {
-            float rms = std::sqrt (rmsAccum / (float) rmsCount);
-            currentRMSdB = 20.0f * std::log10 (rms + 1e-20f);
-            peakdB = 20.0f * std::log10 (peakHold + 1e-20f);
+        if (count > 0) {
+            // Short-term RMS: 50ms exponential moving average of squared signal
+            float blockRMS = std::sqrt(blockRmsSum / (float)count);
+            stRMS += (float)stRMSCoeff * (blockRMS - stRMS);
+            stRMSdB = 20.0f * std::log10(stRMS + 1e-20f);
 
-            // Smooth the meter display
-            smoothedMeter += meterSmoothCoeff * (currentRMSdB - smoothedMeter);
+            // Bar: short-term RMS +1.0dB boost
+            currentRMSdB = stRMSdB + 1.0f;
+            smoothedMeter += (float)meterSmoothCoeff * (currentRMSdB - smoothedMeter);
 
-            rmsAccum = 0.0f;
-            rmsCount = 0;
+            // Slow display (top): asymmetric smooth of short-term RMS +9.0dB boost
+            float boosted = stRMSdB + 9.0f;
+            if (slowInit) {
+                slowDisplaydB = boosted;
+                slowInit = false;
+            } else if (boosted > slowDisplaydB) {
+                slowDisplaydB += (float)slowAttackCoeff * (boosted - slowDisplaydB);
+            } else {
+                slowDisplaydB += (float)slowReleaseCoeff * (boosted - slowDisplaydB);
+            }
+        }
+
+        // ── Fast peak hold decay (per block) ────────────────────────────
+        fastHoldTimer -= (int)ns;
+        if (fastHoldTimer <= 0) {
+            fastPeakHold *= (float)std::pow(fastDecayPS, (double)ns);
+            if (fastPeakHold < 1e-10f) fastPeakHold = 1e-10f;
         }
     }
 
 private:
     double fs = 44100.0;
+    double stRMSCoeff = 0.999, meterSmoothCoeff = 0.999, slowAttackCoeff = 0.999, slowReleaseCoeff = 0.999, fastDecayPS = 0.9999;
+    float  targetGainLin = 1.0f, gainChase = 1.0f;
+    float  stRMS = 0.0f;
+    float  stRMSdB = -60.0f, currentRMSdB = -60.0f, smoothedMeter = -60.0f;
+    float  slowDisplaydB = -60.0f;
+    float  fastPeakHold = 0.0f;
+    int    fastHoldTimer = 0;
+    bool   slowInit = true;
 
-    float targetGainLin  = 1.0f;
-    float gainChase      = 1.0f;
-
-    // Metering
-    float rmsAccum      = 0.0f;
-    int   rmsCount      = 0;
-    float currentRMSdB  = -90.0f;
-    float peakdB        = -90.0f;
-    float peakHold      = 1e-10f;
-    float smoothedMeter = -90.0f;
-    float meterSmoothCoeff = 0.999f;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InputGainStage)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InputGainStage)
 };

@@ -23,13 +23,11 @@ public:
         reset();
     }
 
-    /** Recalc coefficients for new sample rate WITHOUT resetting filter state.
-     *  Called when oversampling mode changes. */
+    /** Force recalc coefficients at the processing sample rate.
+     *  MUST be called whenever effective sample rate changes (oversampling on/off/switch). */
     void updateSampleRate(double newFs) {
-        if (std::abs(newFs - fs) < 0.01) return;
         fs = newFs;
         setupCoefs();
-        // Don't reset — preserve IIR state across sample rate changes
     }
 
     void reset() {

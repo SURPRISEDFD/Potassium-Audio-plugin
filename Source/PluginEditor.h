@@ -186,17 +186,21 @@ public:
         auto& a = proc.apvts;
         auto pv=[&](auto* id){auto* x=a.getParameter(id);return x?x->getValue():0;};
         auto safe = [](float v){ return std::isfinite(v) ? v : -60.0f; };
-        float inP  = safe(proc.getInputRMS());
-        float outP = safe(proc.getOutputRMS());
-        float limGR = safe(std::abs(proc.getLimiterGR()));
+        float inPeak = safe(proc.getInputRMS());             // bar (smoothed RMS, original)
+        float inSlow = safe(proc.getInputSlowPeak());        // top number (1s release)
+        float inFast = safe(proc.getInputFastPeak());        // bottom number (100ms release)
+        float outPeak= safe(proc.getOutputRMS());
+        float limGR  = safe(std::abs(proc.getLimiterGR()));
         float compGR = safe(std::abs(proc.getCompressorGR()));
         juce::String js;
         js << "var S=window._S;"
-           << "S.inPeak=" << juce::String(inP,1) << ";"
-           << "S.outPeak=" << juce::String(outP,1) << ";"
-           << "S.sweet=" << (pv(ParamIDs::sweetSpot)>0.5f?"true":"false") << ";"
+           << "S.inPeak=" << juce::String(inPeak,1) << ";"
+           << "S.inSlow=" << juce::String(inSlow,1) << ";"
+           << "S.inFast=" << juce::String(inFast,1) << ";"
+           << "S.outPeak="<< juce::String(outPeak,1)<< ";"
+           << "S.sweet="  << (pv(ParamIDs::sweetSpot)>0.5f?"true":"false") << ";"
            << "S.compGR=" << juce::String(compGR,1) << ";"
-           << "S.limGR=" << juce::String(limGR,1) << ";"
+           << "S.limGR="  << juce::String(limGR,1) << ";"
            << "window._render()";
         wv->evaluateJavascript(js);
     }

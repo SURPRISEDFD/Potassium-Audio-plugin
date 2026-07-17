@@ -24,7 +24,6 @@ public:
     }
 
     void updateSampleRate(double newFs) {
-        if (std::abs(newFs - fs) < 0.01) return;
         fs = (float)newFs;
         lookahead = juce::jmax(4, (int)(0.002f * fs));
         int newBufSize = (lookahead + lastBlockSize + 4) * 2;

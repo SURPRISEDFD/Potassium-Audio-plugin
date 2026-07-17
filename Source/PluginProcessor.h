@@ -252,16 +252,16 @@ public:
         juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 2 };
 
         oversampling.prepare (spec);
-        inputGain.prepare   (effectiveRate, samplesPerBlock);
-        compressor.prepare  (effectiveRate, samplesPerBlock);
-        saturator.prepare   (effectiveRate, samplesPerBlock);
-        eqStage.prepare     (effectiveRate, samplesPerBlock);
+        inputGain.prepare   (sampleRate, samplesPerBlock);     // base rate
+        eqStage.prepare     (sampleRate, samplesPerBlock);     // base rate
+        compressor.prepare  (sampleRate, samplesPerBlock);     // base rate — timing consistent
+        saturator.prepare   (effectiveRate, samplesPerBlock);  // effective rate — ADAA anti-aliasing
         density.prepare     (effectiveRate, samplesPerBlock);
-        limiter.prepare     (effectiveRate, samplesPerBlock);
+        limiter.prepare     (effectiveRate, samplesPerBlock);  // effective rate — lookahead timing
         stereoWidth.prepare (effectiveRate, samplesPerBlock);
         outputGain.prepare  (effectiveRate, samplesPerBlock);
 
-        setLatencySamples (oversampling.getLatencySamples());
+        setLatencySamples (oversampling.getLatencySamples() + saturator.getLatencySamples());
 
         prevOversamplingMode = oversampling.getMode();
     }
@@ -275,8 +275,10 @@ public:
     bool hasEditor() const override { return true; }
 
     // ── Identity ────────────────────────────────────────────────────────────
-    float getInputRMS()  const noexcept { return inputGain.getRMSdB(); }
-    float getOutputRMS() const noexcept { return outputPeakDB; }
+    float getInputRMS()     const noexcept { return inputGain.getRMSdB(); }     // bar
+    float getInputSlowPeak() const noexcept { return inputGain.getSlowPeak(); }  // top number
+    float getInputFastPeak() const noexcept { return inputGain.getFastPeak(); }  // bottom number
+    float getOutputRMS()    const noexcept { return outputPeakDB; }
     float getLimiterGR() const noexcept { return limiter.getGainReductionDB(); }
     float getCompressorGR() const noexcept { return compressor.getGR(); }
 
@@ -439,12 +441,10 @@ private:
         {
             prevOversamplingMode = osMode;
             oversampling.setMode (osMode);
-            setLatencySamples (oversampling.getLatencySamples());
+            setLatencySamples (oversampling.getLatencySamples() + saturator.getLatencySamples());
         }
-        // Always keep EQ + dynamics at the correct effective rate (no-op if unchanged)
+        // Keep limiter lookahead at the correct effective rate
         double effRate = baseSampleRate * oversampling.getCurrentFactor();
-        eqStage.updateSampleRate (effRate);
-        compressor.updateSampleRate (effRate);
         limiter.updateSampleRate (effRate);
     }
 

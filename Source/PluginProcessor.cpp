@@ -22,15 +22,18 @@ void PotassiumAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear(i, 0, buffer.getNumSamples());
 
-    auto block   = juce::dsp::AudioBlock<float>(buffer);
+    auto block = juce::dsp::AudioBlock<float>(buffer);
+
+    // ── Base-rate processing (always at the DAW sample rate) ──
+    // EQ crossover & compressor timing are independent of oversampling.
+    inputGain.process(block);
+    if (!*eqBypassParam)     eqStage.process(block);
+    if (!*compBypassParam)   compressor.process(block);
+
+    // ── Oversampled processing ──
     auto osBlock = oversampling.processSamplesUp(block);
 
-    // ── Signal chain (all inside oversampling) ──
-    // InputGain → ButterComp2 → Drive → SmoothEQ3 → StereoFX → Limiter → OutputGain
-    inputGain.process(osBlock);
-    if (!*compBypassParam)   compressor.process(osBlock);
     if (!*driveBypassParam)  saturator.process(osBlock);
-    if (!*eqBypassParam)     eqStage.process(osBlock);
     if (!*stereoBypassParam) stereoWidth.process(osBlock);
     if (!*limitBypassParam)  limiter.process(osBlock);
     outputGain.process(osBlock);
