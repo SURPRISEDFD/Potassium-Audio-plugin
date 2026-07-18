@@ -1,6 +1,6 @@
 # Potassium — 混音总线处理器
 
-[![Version](https://img.shields.io/badge/version-1.0.4-gold)](https://github.com/IumAudio/Potassium-Audio-plugin/releases)
+[![Version](https://img.shields.io/badge/version-1.0.7-gold)](https://github.com/IumAudio/Potassium-Audio-plugin/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue)](https://github.com/IumAudio/Potassium-Audio-plugin/releases)
 [![Format](https://img.shields.io/badge/format-VST3-purple)](https://github.com/IumAudio/Potassium-Audio-plugin/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
