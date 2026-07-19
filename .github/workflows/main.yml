@@ -11,12 +11,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure CMake (MSVC /arch:AVX, disable WebView2)
+      - name: Clean previous build (avoid cache issues)
+        run: if (Test-Path build) { Remove-Item -Recurse -Force build }
+
+      - name: Configure CMake (AVX only, disable WebView2 via macro)
         run: >
           cmake -B build
           -DCMAKE_C_FLAGS="/arch:AVX"
-          -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc"
-          -DJUCE_WEBVIEW2_AVAILABLE=OFF
+          -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc /DJUCE_WEBVIEW2_AVAILABLE=0"
 
       - name: Build
         run: cmake --build build --config Release
