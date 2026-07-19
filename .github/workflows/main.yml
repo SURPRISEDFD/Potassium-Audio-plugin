@@ -11,20 +11,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 安装 WebView2 SDK（NuGet 包）
-      - name: Install WebView2 SDK
-        run: |
-          $nugetPackageDir = "${{ runner.temp }}\webview2_sdk"
-          nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory $nugetPackageDir
-          $sdkRoot = (Get-ChildItem -Path $nugetPackageDir -Directory | Select-Object -First 1).FullName
-          echo "WEBVIEW2_SDK=$sdkRoot" >> $env:GITHUB_ENV
-
-      - name: Configure CMake
+      - name: Configure CMake (MSVC /arch:AVX, disable WebView2)
         run: >
           cmake -B build
           -DCMAKE_C_FLAGS="/arch:AVX"
           -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc"
-          -DCMAKE_PREFIX_PATH="${{ env.WEBVIEW2_SDK }}\build\native"
+          -DJUCE_WEBVIEW2_AVAILABLE=OFF
 
       - name: Build
         run: cmake --build build --config Release
