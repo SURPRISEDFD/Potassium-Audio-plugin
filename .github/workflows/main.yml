@@ -11,37 +11,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install WebView2 SDK and set MSVC paths
+      - name: Install WebView2 SDK and build with AVX
         shell: pwsh
         run: |
-          # 1. 下载并安装 WebView2 SDK NuGet 包
+          # 1. 下载 WebView2 SDK NuGet 包
           $nugetDir = "${{ runner.temp }}\wv2"
           nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory $nugetDir
           
-          # 2. 找到解压后的实际目录（带版本号的文件夹）
+          # 2. 定位 include 和 lib 目录
           $sdkDir = (Get-ChildItem -Path $nugetDir -Directory)[0].FullName
           $includePath = "$sdkDir\build\native\include"
           $libPath = "$sdkDir\build\native\lib\x64"
-          
-          Write-Host "WebView2 SDK include: $includePath"
-          Write-Host "WebView2 SDK lib: $libPath"
-          
-          # 3. 将路径注入 MSVC 的环境变量（此会话内生效）
-          $env:INCLUDE = "$includePath;$env:INCLUDE"
-          $env:LIB = "$libPath;$env:LIB"
+          Write-Host "WebView2 include: $includePath"
+          Write-Host "WebView2 lib: $libPath"
 
-          # 4. 清理旧的构建目录（避免 CMake 缓存污染）
+          # 3. 清理旧构建缓存
           if (Test-Path build) { Remove-Item -Recurse -Force build }
 
-          # 5. 配置 CMake，仅开启 AVX 指令，并启用 C++ 异常
+          # 4. 配置 CMake：通过编译器标志注入头文件路径和库路径
+          #    注意 /I 和 /LIBPATH 后跟的路径用双引号包裹，防止空格问题
           cmake -B build `
-            -DCMAKE_C_FLAGS="/arch:AVX" `
-            -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc"
-          
-          # 6. 编译 Release 版本
+            -DCMAKE_C_FLAGS="/arch:AVX /I`"$includePath`"" `
+            -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc /I`"$includePath`"" `
+            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:`"$libPath`"" `
+            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:`"$libPath`""
+
+          # 5. 编译
           cmake --build build --config Release
 
-      - name: Upload build artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-avx-binaries
