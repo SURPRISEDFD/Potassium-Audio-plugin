@@ -1,7 +1,7 @@
 name: Build Windows AVX-only
 on:
   push:
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -11,16 +11,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure CMake (MSVC /arch:AVX + exception handling)
+      # 安装 WebView2 SDK（NuGet 包）
+      - name: Install WebView2 SDK
         run: |
-          cmake -B build `
-            -DCMAKE_C_FLAGS="/arch:AVX" `
-            -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc"
+          $nugetPackageDir = "${{ runner.temp }}\webview2_sdk"
+          nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory $nugetPackageDir
+          $sdkRoot = (Get-ChildItem -Path $nugetPackageDir -Directory | Select-Object -First 1).FullName
+          echo "WEBVIEW2_SDK=$sdkRoot" >> $env:GITHUB_ENV
+
+      - name: Configure CMake
+        run: >
+          cmake -B build
+          -DCMAKE_C_FLAGS="/arch:AVX"
+          -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc"
+          -DCMAKE_PREFIX_PATH="${{ env.WEBVIEW2_SDK }}\build\native"
 
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Upload build artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-avx-binaries
