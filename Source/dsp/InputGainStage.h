@@ -18,11 +18,11 @@ public:
         // Bar + sweet-spot: 30ms smoothing on short-term RMS
         meterSmoothCoeff = 1.0 - std::exp(-Tb / 0.030);
 
-        // Slow display (top): asymmetric on short-term RMS — fast attack, slow release
-        slowAttackCoeff  = 1.0 - std::exp(-Tb / 0.200);   // 200ms rise
-        slowReleaseCoeff = 1.0 - std::exp(-Tb / 1.000);   // 1.0s fall
+        // Slow display (top): asymmetric on short-term RMS — slower attack, slow release
+        slowAttackCoeff  = 1.0 - std::exp(-Tb / 0.350);   // 350ms rise
+        slowReleaseCoeff = 1.0 - std::exp(-Tb / 1.500);   // 1.5s fall
 
-        // Fast peak hold (bottom): 40 dB/s after 150ms hold
+        // Fast peak hold (bottom): 40 dB/s after 500ms hold
         fastDecayPS = std::exp(-2.302585 / (0.5 * fs));
 
         gainChase = 1.0f;
@@ -88,7 +88,7 @@ public:
             // ── Fast peak hold: instant attack, 150ms hold ──────────────
             if (mx > fastPeakHold) {
                 fastPeakHold  = mx;
-                fastHoldTimer = (int)(fs * 0.15);
+                fastHoldTimer = (int)(fs * 0.50);   // 500ms hold
             }
         }
 

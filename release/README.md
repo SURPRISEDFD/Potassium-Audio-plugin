@@ -1,6 +1,6 @@
 # Potassium — 混音总线处理器
 
-[![Version](https://img.shields.io/badge/version-1.0.7-gold)](https://github.com/IumAudio/Potassium-Audio-plugin/releases)
+[![Version](https://img.shields.io/badge/version-1.0.8-gold)](https://github.com/IumAudio/Potassium-Audio-plugin/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue)](https://github.com/IumAudio/Potassium-Audio-plugin/releases)
 [![Format](https://img.shields.io/badge/format-VST3-purple)](https://github.com/IumAudio/Potassium-Audio-plugin/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -123,6 +123,15 @@ cmake --build /c/PotassiumBuild --config Release
 ---
 
 ## 更新日志
+
+### v1.0.8 (2026-07-18)
+- UI：顶部新增信息栏——插件名称、信号链、Manual 内置说明书与 DJAnta 外链按钮
+- UI：电平数值引入动态色彩——RMS 在甜点区间白黄紫渐变，Peak 命中甜点时瞬间紫闪
+- UI：粒子特效高分辨率重制——钾紫色粒子带光影与拖尾，粒子区域深色背景与外圈形成对比
+- UI：整体背景与面板提亮，Push 外圈加亮，弧线下方辉光增强
+- UI：撤销模块外框加亮，顶部分隔线加亮
+- 优化：慢速 RMS 响应更从容，峰值保持时间延长使读数更易辨识
+- 优化：无信号时粒子自动隐藏，有信号时动态恢复
 
 ### v1.0.7 (2026-07-18)
 - UI：粒子特效加亮增强，对比度提升
