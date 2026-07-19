@@ -1,0 +1,24 @@
+name: Build Windows AVX-only
+on:
+  push:
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake (MSVC /arch:AVX)
+        run: cmake -B build -DCMAKE_C_FLAGS="/arch:AVX" -DCMAKE_CXX_FLAGS="/arch:AVX"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-avx-binaries
+          path: build/Release/**
