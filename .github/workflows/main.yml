@@ -11,14 +11,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Clean previous build (avoid cache issues)
+      - name: Install WebView2 SDK
+        run: |
+          $nugetDir = "${{ runner.temp }}\webview2_sdk"
+          nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory $nugetDir
+          # NuGet 解压后的文件夹通常包含版本号，取第一个子文件夹
+          $sdkDir = (Get-ChildItem -Path $nugetDir -Directory | Select-Object -First 1).FullName
+          # WebView2_ROOT 需要指向 build/native 目录
+          "WEBVIEW2_ROOT=$sdkDir\build\native" >> $env:GITHUB_ENV
+
+      - name: Clean previous build
         run: if (Test-Path build) { Remove-Item -Recurse -Force build }
 
-      - name: Configure CMake (AVX only, disable WebView2 via macro)
+      - name: Configure CMake (AVX only, WebView2 path set)
         run: >
           cmake -B build
           -DCMAKE_C_FLAGS="/arch:AVX"
-          -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc /DJUCE_WEBVIEW2_AVAILABLE=0"
+          -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc"
+          -DWebView2_ROOT="${{ env.WEBVIEW2_ROOT }}"
 
       - name: Build
         run: cmake --build build --config Release
