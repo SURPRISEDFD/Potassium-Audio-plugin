@@ -11,8 +11,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure CMake (MSVC /arch:AVX)
-        run: cmake -B build -DCMAKE_C_FLAGS="/arch:AVX" -DCMAKE_CXX_FLAGS="/arch:AVX"
+      - name: Configure CMake (MSVC /arch:AVX + exception handling)
+        run: |
+          cmake -B build `
+            -DCMAKE_C_FLAGS="/arch:AVX" `
+            -DCMAKE_CXX_FLAGS="/arch:AVX /EHsc"
 
       - name: Build
         run: cmake --build build --config Release
